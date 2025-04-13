@@ -1,9 +1,20 @@
-import 'dart:math';
+// ignore_for_file: deprecated_member_use
+import 'dart:async';
 
+import 'package:app_music/components/my_drawer.dart';
 import 'package:app_music/components/neu_box.dart';
+import 'package:app_music/models/lyric_model.dart';
 import 'package:app_music/models/playlist_provider.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+// Hàm format thời gian kiểu mm:ss
+String formatTime(Duration duration) {
+  final minutes = duration.inMinutes;
+  final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+  return '$minutes:$seconds';
+}
 
 class SongPage extends StatefulWidget {
   const SongPage({super.key});
@@ -12,37 +23,51 @@ class SongPage extends StatefulWidget {
   State<SongPage> createState() => _SongPageState();
 }
 
-class _SongPageState extends State<SongPage> with SingleTickerProviderStateMixin {
+class _SongPageState extends State<SongPage>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+  late Lyric _lyric;
+  late AudioPlayer _audioPlayer;
+  late Timer _timer;
+  int _currentLineIndex = 0;
+  double _currentTime = 0.0;
+
+
+  
 
   @override
   void initState() {
     super.initState();
-    // Lặp vô hạn và thời gian xoay 10s/lần
+    // Khởi tạo hiệu ứng quay album
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 20),
-    )..repeat();
+    )..repeat(); // Quay liên tục
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller.dispose(); // Hủy animation
     super.dispose();
   }
+
+  
 
   @override
   Widget build(BuildContext context) {
     return Consumer<PlaylistProvider>(
       builder: (context, value, child) {
+        final playList = value.playlist;
+        final currentSong = playList[value.currentSongIndex];
+
         return Scaffold(
           backgroundColor: Theme.of(context).colorScheme.background,
           body: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.only(left: 25, right: 25, bottom: 25),
+              padding: const EdgeInsets.all(25),
               child: Column(
                 children: [
-                  // App bar
+                  // Header điều hướng
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -63,19 +88,21 @@ class _SongPageState extends State<SongPage> with SingleTickerProviderStateMixin
                       IconButton(
                         icon: const Icon(Icons.menu),
                         onPressed: () {
-                          Navigator.pop(context);
+                          // Mở menu hoặc drawer nếu cần
+                           Navigator.push(context, MaterialPageRoute(
+                            builder: (context) => const MyDrawer(),
+                           ));
                         },
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 20),
 
-                  // Song title & artist
+                  // Tên bài hát + ca sĩ
                   Column(
                     children: [
                       Text(
-                        value.playlist[value.currentSongIndex].songName,
+                        currentSong.songName,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -83,7 +110,7 @@ class _SongPageState extends State<SongPage> with SingleTickerProviderStateMixin
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        value.playlist[value.currentSongIndex].artistName,
+                        currentSong.artistName,
                         style: const TextStyle(
                           fontSize: 16,
                           color: Colors.grey,
@@ -91,17 +118,16 @@ class _SongPageState extends State<SongPage> with SingleTickerProviderStateMixin
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 20),
 
-                  // Album Art with Rotation
+                  // Ảnh album quay tròn
                   NeuBox(
                     child: RotationTransition(
                       turns: _controller,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(180),
                         child: Image.asset(
-                          value.playlist[value.currentSongIndex].albumArtImagePath,
+                          currentSong.albumArtImagePath,
                           width: 250,
                           height: 250,
                           fit: BoxFit.cover,
@@ -109,112 +135,117 @@ class _SongPageState extends State<SongPage> with SingleTickerProviderStateMixin
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 25),
-                
-                // song duration progress
+
+                  // Thời lượng + nút shuffle + repeat
                   Column(
                     children: [
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 25.0),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 25.0),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            // start and time
-                            Text(
-                              "0:00",
-                              style: TextStyle(
-                                fontSize: 14,
+                            // Thời gian hiện tại (cố định chiều rộng)
+                            SizedBox(
+                              width: 40, // đủ chứa "00:00"
+                              child: Text(formatTime(value.currentDuration)),
+                            ),
+
+                            // Nút shuffle
+                            IconButton(
+                              icon: Icon(
+                                Icons.shuffle,
+                                color:
+                                    value.isShuffle ? Colors.deepOrange : Colors.grey,
+                              ),
+                              onPressed: value.toggleShuffle,
+                            ),
+
+                            // Nút repeat
+                            IconButton(
+                              icon: Icon(
+                                Icons.repeat,
+                                color:
+                                    value.isRepeat ? Colors.deepOrange : Colors.grey,
+                              ),
+                              onPressed: value.toggleRepeat,
+                            ),
+
+                            // Tổng thời lượng (cố định chiều rộng)
+                            SizedBox(
+                              width: 40, // đủ chứa "00:00"
+                              child: Text(
+                                formatTime(value.totalDuration),
+                                textAlign: TextAlign.end,
                               ),
                             ),
-                        
-                            // shufle icon
-                             Icon(
-                              Icons.shuffle,
-                            ),
-                        
-                            // repeat icon
-                             Icon(
-                              Icons.repeat,
-                            ),
-                        
-                        
-                            // end time
-                             Text(
-                              "0:0",
-                              style: TextStyle(
-                                fontSize: 14,
-                              ),
-                            ),
-                              
                           ],
                         ),
                       ),
 
-                       SliderTheme(
+                      // Slider tiến trình
+                      SliderTheme(
                         data: SliderTheme.of(context).copyWith(
-                          thumbShape: 
-                          const RoundSliderThumbShape(enabledThumbRadius: 0),
-                        ),
-          
-                         child: Slider(
-                          min: 0,
-                          max: 100,
-                          value: 50, 
-                          activeColor: Theme.of(context).colorScheme.primary,
-                          onChanged: (value) {},
+                          thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 0,
                           ),
-                       ),
-                  
+                        ),
+                        child: Slider(
+                          min: 0,
+                          max: value.totalDuration.inSeconds.toDouble(),
+                          value: value.currentDuration.inSeconds
+                              .clamp(0, value.totalDuration.inSeconds)
+                              .toDouble(),
+                          activeColor: Theme.of(context).colorScheme.primary,
+                          onChanged: (_) {},
+                          onChangeEnd: (double seconds) {
+                            value.seek(Duration(seconds: seconds.toInt()));
+                          },
+                        ),
+                      ),
                     ],
                   ),
-                   const SizedBox(height: 25),
+                  const SizedBox(height: 25),
 
-                  // play back control
-                 Row(
-                  children: [
-
-                    // skip previous
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          
-                        },
-                        child: NeuBox(child: 
-                              Icon(Icons.skip_previous,)),
+                  // Nút điều khiển phát nhạc
+                  Row(
+                    children: [
+                      // Trước
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: value.playPreviousSong,
+                          child: NeuBox(
+                            child: Icon(Icons.skip_previous),
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 20),
 
-                    const SizedBox(width: 20),
-
-                    // play/pause button
-                    Expanded(
-                      flex: 2,
-                      child: GestureDetector(
-                        onTap: () {
-                          
-                        },
-                        child: NeuBox(child: 
-                              Icon(Icons.play_arrow,)),
+                      // Phát / dừng
+                      Expanded(
+                        flex: 2,
+                        child: GestureDetector(
+                          onTap: value.pauseOrResume,
+                          child: NeuBox(
+                            child: Icon(value.isPlaying
+                                ? Icons.pause
+                                : Icons.play_arrow),
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 20),
 
-                    const SizedBox(width: 20),
-
-                    // skip forward
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          
-                        },
-                        child: NeuBox(child: 
-                              Icon(Icons.skip_next,)),
+                      // Sau
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: value.playNextSong,
+                          child: NeuBox(
+                            child: Icon(Icons.skip_next),
+                          ),
+                        ),
                       ),
-                    )
-
-                  ],
-                 )
-
+                    ],
+                  )
                 ],
               ),
             ),
