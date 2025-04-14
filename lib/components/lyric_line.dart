@@ -3,6 +3,7 @@ import 'package:xml/xml.dart';
 class LyricWord {
   final String text;
   final double start;
+  
 
   LyricWord({required this.text, required this.start});
 }

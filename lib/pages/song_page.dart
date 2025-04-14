@@ -1,13 +1,13 @@
 // ignore_for_file: deprecated_member_use
 import 'dart:async';
-
 import 'package:app_music/components/my_drawer.dart';
 import 'package:app_music/components/neu_box.dart';
 import 'package:app_music/models/lyric_model.dart';
 import 'package:app_music/models/playlist_provider.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:app_music/pages/lyric_karaoke.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 
 // Hàm format thời gian kiểu mm:ss
 String formatTime(Duration duration) {
@@ -23,35 +23,95 @@ class SongPage extends StatefulWidget {
   State<SongPage> createState() => _SongPageState();
 }
 
-class _SongPageState extends State<SongPage>
-    with SingleTickerProviderStateMixin {
+class _SongPageState extends State<SongPage> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Lyric _lyric;
-  late AudioPlayer _audioPlayer;
-  late Timer _timer;
-  int _currentLineIndex = 0;
-  double _currentTime = 0.0;
+  Lyric? _lyric;
+  String? _currentSongName; // Biến để lưu tên bài hát hiện tại
 
+  Future<void> _loadLyrics(String songName) async {
+    try {
+      print('Attempting to load lyrics for song: $songName');
+      final fileName = Lyric.getLyricFileName(songName);
+      print('Generated filename: $fileName');
+      final lyricFile = await rootBundle.loadString('assets/lyrics/$fileName');
+      setState(() {
+        _lyric = Lyric.fromXml(lyricFile);
+      });
+    } catch (e) {
+      print('Error loading lyrics: $e');
+      print('Song name was: $songName');
+      print('Mapped file name was: ${Lyric.getLyricFileName(songName)}');
+    }
+  }
 
-  
+  // Hiệu ứng lyrics
+  Widget _buildLyricSection(PlaylistProvider provider) {
+  if (_lyric == null || _lyric!.lines.isEmpty) {
+    return const Center(child: Text("Không có lời bài hát"));
+  }
 
+  final currentTime = provider.currentDuration.inMilliseconds / 1000.0;
+  final currentLine = _lyric!.getLineAtTime(currentTime);
+  final nextLines = _lyric!.getNextTwoLines(currentTime);
+  final nextLine = nextLines.isNotEmpty ? nextLines.firstOrNull : null;
+
+  // Lấy chiều rộng màn hình
+  final screenWidth = MediaQuery.of(context).size.width;
+
+  return Column(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      // Dòng lyric hiện tại
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 2.0),
+        child: SizedBox(
+          width: screenWidth * 0.9, // Chiếm 90% chiều rộng màn hình
+          child: Text(
+            currentLine?.words.map((w) => w.text).join('') ?? '',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+      // Dòng lyric tiếp theo
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
+        child: SizedBox(
+          width: screenWidth * 0.9, // Chiếm 90% chiều rộng màn hình
+          child: Text(
+            nextLine?.words.map((w) => w.text).join('') ?? '',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Theme.of(context)
+                  .colorScheme
+                  .onBackground
+                  .withOpacity(0.5),
+              fontSize: 16,
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+}
   @override
   void initState() {
     super.initState();
-    // Khởi tạo hiệu ứng quay album
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 20),
-    )..repeat(); // Quay liên tục
+    )..repeat();
   }
 
   @override
   void dispose() {
-    _controller.dispose(); // Hủy animation
+    _controller.dispose();
     super.dispose();
   }
-
-  
 
   @override
   Widget build(BuildContext context) {
@@ -60,19 +120,27 @@ class _SongPageState extends State<SongPage>
         final playList = value.playlist;
         final currentSong = playList[value.currentSongIndex];
 
+        // Kiểm tra nếu bài hát hiện tại khác với bài hát trước đó
+        if (_currentSongName != currentSong.songName) {
+          _currentSongName = currentSong.songName; // Cập nhật tên bài hát hiện tại
+          _loadLyrics(currentSong.songName); // Tải lại lyrics
+        }
+
         return Scaffold(
           backgroundColor: Theme.of(context).colorScheme.background,
           body: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(25),
+              padding: const EdgeInsets.fromLTRB(25, 10, 25, 25),
               child: Column(
                 children: [
-                  // Header điều hướng
+                  // Header section with reduced vertical spacing
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.arrow_back),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(Icons.arrow_back, size: 24),
                         onPressed: () {
                           Navigator.pop(context);
                         },
@@ -86,116 +154,141 @@ class _SongPageState extends State<SongPage>
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.menu),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(Icons.menu, size: 24),
                         onPressed: () {
-                          // Mở menu hoặc drawer nếu cần
-                           Navigator.push(context, MaterialPageRoute(
-                            builder: (context) => const MyDrawer(),
-                           ));
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const MyDrawer()),
+                          );
                         },
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-
-                  // Tên bài hát + ca sĩ
+                  const SizedBox(height: 10),
+                  // Song info with reduced spacing
                   Column(
                     children: [
                       Text(
                         currentSong.songName,
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 17,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(
                         currentSong.artistName,
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: 14,
                           color: Colors.grey,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-
-                  // Ảnh album quay tròn
+                  const SizedBox(height: 15),
+                  // Album art with adjusted size
                   NeuBox(
                     child: RotationTransition(
                       turns: _controller,
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(180),
+                        borderRadius: BorderRadius.circular(160),
                         child: Image.asset(
                           currentSong.albumArtImagePath,
-                          width: 250,
-                          height: 250,
+                          width: 240,
+                          height: 240,
                           fit: BoxFit.cover,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 25),
-
-                  // Thời lượng + nút shuffle + repeat
+                  // Expanded lyrics section
+                  Expanded(
+                    flex: 2,
+                    child: _buildLyricSection(value),
+                  ),
+                  // Player controls with reduced spacing
                   Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Time and controls row
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 25.0),
+                        padding: const EdgeInsets.symmetric(horizontal: 15.0),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            // Thời gian hiện tại (cố định chiều rộng)
                             SizedBox(
-                              width: 40, // đủ chứa "00:00"
-                              child: Text(formatTime(value.currentDuration)),
-                            ),
-
-                            // Nút shuffle
-                            IconButton(
-                              icon: Icon(
-                                Icons.shuffle,
-                                color:
-                                    value.isShuffle ? Colors.deepOrange : Colors.grey,
+                              width: 35,
+                              child: Text(
+                                formatTime(value.currentDuration),
+                                style: const TextStyle(fontSize: 12),
                               ),
-                              onPressed: value.toggleShuffle,
                             ),
-
-                            // Nút repeat
-                            IconButton(
-                              icon: Icon(
-                                Icons.repeat,
-                                color:
-                                    value.isRepeat ? Colors.deepOrange : Colors.grey,
-                              ),
-                              onPressed: value.toggleRepeat,
+                            Row(
+                              children: [
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  icon: Icon(
+                                    Icons.shuffle,
+                                    size: 24,
+                                    color: value.isShuffle ? Colors.deepOrange : Colors.grey,
+                                  ),
+                                  onPressed: value.toggleShuffle,
+                                ),
+                                const SizedBox(width: 15),
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  icon: Icon(
+                                    Icons.repeat,
+                                    size: 24,
+                                    color: value.isRepeat ? Colors.deepOrange : Colors.grey,
+                                  ),
+                                  onPressed: value.toggleRepeat,
+                                ),
+                                const SizedBox(width: 15),
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  icon: const Icon(
+                                    Icons.queue_music,
+                                    size: 24,
+                                    color: Colors.grey,
+                                  ),
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => const LyricKaraokePage(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
                             ),
-
-                            // Tổng thời lượng (cố định chiều rộng)
                             SizedBox(
-                              width: 40, // đủ chứa "00:00"
+                              width: 35,
                               child: Text(
                                 formatTime(value.totalDuration),
+                                style: const TextStyle(fontSize: 12),
                                 textAlign: TextAlign.end,
                               ),
                             ),
                           ],
                         ),
                       ),
-
-                      // Slider tiến trình
+                      const SizedBox(height: 5),
+                      // Progress slider
                       SliderTheme(
                         data: SliderTheme.of(context).copyWith(
-                          thumbShape: const RoundSliderThumbShape(
-                            enabledThumbRadius: 0,
-                          ),
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 0),
                         ),
                         child: Slider(
                           min: 0,
                           max: value.totalDuration.inSeconds.toDouble(),
-                          value: value.currentDuration.inSeconds
-                              .clamp(0, value.totalDuration.inSeconds)
-                              .toDouble(),
+                          value: value.currentDuration.inSeconds.clamp(0, value.totalDuration.inSeconds).toDouble(),
                           activeColor: Theme.of(context).colorScheme.primary,
                           onChanged: (_) {},
                           onChangeEnd: (double seconds) {
@@ -203,49 +296,46 @@ class _SongPageState extends State<SongPage>
                           },
                         ),
                       ),
+                      // Playback controls
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 15.0),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: value.playPreviousSong,
+                                child: const NeuBox(
+                                  child: Icon(Icons.skip_previous, size: 24),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 15),
+                            Expanded(
+                              flex: 2,
+                              child: GestureDetector(
+                                onTap: value.pauseOrResume,
+                                child: NeuBox(
+                                  child: Icon(
+                                    value.isPlaying ? Icons.pause : Icons.play_arrow,
+                                    size: 32,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 15),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: value.playNextSong,
+                                child: const NeuBox(
+                                  child: Icon(Icons.skip_next, size: 24),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 25),
-
-                  // Nút điều khiển phát nhạc
-                  Row(
-                    children: [
-                      // Trước
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: value.playPreviousSong,
-                          child: NeuBox(
-                            child: Icon(Icons.skip_previous),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 20),
-
-                      // Phát / dừng
-                      Expanded(
-                        flex: 2,
-                        child: GestureDetector(
-                          onTap: value.pauseOrResume,
-                          child: NeuBox(
-                            child: Icon(value.isPlaying
-                                ? Icons.pause
-                                : Icons.play_arrow),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 20),
-
-                      // Sau
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: value.playNextSong,
-                          child: NeuBox(
-                            child: Icon(Icons.skip_next),
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
                 ],
               ),
             ),
