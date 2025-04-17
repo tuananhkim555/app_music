@@ -17,6 +17,12 @@ class PlaylistProvider extends ChangeNotifier {
       artistName: "React",
       albumArtImagePath: "assets/images/anhtuan.jpg",
       audioPath: "audio/lacloi.mp3",
+    ),
+     Song(
+      songName: "Tình đầu quá chén",
+      artistName: "Quang Hùng MasterD",
+      albumArtImagePath: "assets/images/tinhdauquachen.jpeg",
+      audioPath: "audio/tinhdauquachen.mp3",
     )
   ];
 
