@@ -206,7 +206,7 @@ class _SongPageState extends State<SongPage>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 25),
                   // Album art with adjusted size
                   NeuBox(
                     child: RotationTransition(
@@ -215,18 +215,19 @@ class _SongPageState extends State<SongPage>
                         borderRadius: BorderRadius.circular(160),
                         child: Image.asset(
                           currentSong.albumArtImagePath,
-                          width: 240,
-                          height: 240,
+                          width: 280,
+                          height: 280,
                           fit: BoxFit.cover,
                         ),
                       ),
                     ),
                   ),
                   // Expanded lyrics section
-                  Expanded(
-                    flex: 2,
-                    child: _buildLyricSection(value),
-                  ),
+                  // Expanded(
+                  //   flex: 1,
+                  //   child: _buildLyricSection(value),
+                  // ),
+                  const SizedBox(height: 50),
                   // Player controls with reduced spacing
                   Column(
                     mainAxisSize: MainAxisSize.min,
