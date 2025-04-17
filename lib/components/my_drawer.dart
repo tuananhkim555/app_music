@@ -1,6 +1,7 @@
 // ignore_for_file: deprecated_member_use
 
 import 'package:app_music/pages/setting_page.dart';
+import 'package:app_music/pages/song_page.dart';
 import 'package:flutter/material.dart';
 
 class MyDrawer extends StatelessWidget {
@@ -98,7 +99,15 @@ class MyDrawer extends StatelessWidget {
             context,
             icon: Icons.home,
             title: 'HOME',
-            onTap: () => Navigator.pop(context),
+           onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SongPage(),
+                ),
+              );
+            },
           ),
 
           // Settings
