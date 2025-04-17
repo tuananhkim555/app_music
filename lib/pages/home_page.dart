@@ -94,6 +94,7 @@ class _HomePageState extends State<HomePage> {
                           dense: true,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 4.0),
                           leading: CircleAvatar(
+                          
                             backgroundImage: AssetImage(song.albumArtImagePath),
                             radius: 24,
                           ),
