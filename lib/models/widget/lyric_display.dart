@@ -1,4 +1,4 @@
-import 'package:app_music/components/lyric_line.dart';
+import 'package:app_music/models/lyric_line.dart';
 import 'package:flutter/material.dart';
 
 class LyricsDisplay extends StatelessWidget {
